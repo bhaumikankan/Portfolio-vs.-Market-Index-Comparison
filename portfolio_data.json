@@ -1,0 +1,14 @@
+{
+    "Correlation": 0.08152909015902922,
+    "Correlation Meaning": "No significant correlation Consult With Registered Advisor to Hedge",
+    "Total Portfolio Value": 513439.99938964844,
+    "Portfolio Weighted Beta": 1.0166666666666666,
+    "Total Portfolio Beta": 521997.3327128092,
+    "Portfolio vs. Index Value Ratio": 6171.673031296997,
+    "Portfolio vs. Index Beta Ratio": 6274.53424848528,
+    "Stock Data": {
+        "ITC.NS": 100.0,
+        "RELIANCE.NS": 200.0
+    },
+    "Potential Return from Index Hedge": 128359.99984741211
+}
