@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 import base64
 from fastapi import FastAPI, File, UploadFile
+from typing import List, Dict
+import json
+import os
 
 app = FastAPI()
 
@@ -79,20 +82,22 @@ def plot_price_relation(portfolio, index_data, portfolio_name, index_name):
 
     return base64.b64encode(buffer.read()).decode(), correlation, correlation_meaning
 
-def csv_to_dict(csv_content):
-    # Assuming the CSV has a header row
-    reader = csv.DictReader(csv_content.splitlines())
-    rows = list(reader)
-    return rows
+def get_beta(symbol):
+    file_path = 'stock_analysis_results2018.json'
+    with open(file_path, 'r') as file:
+        data = json.load(file)
+        l=[d["Beta"] for d in data if d["Stock"]==f'{symbol}.NS']
+        if len(l)>0:
+            return float(l[0])
+        else:
+            raise Exception(f'Beta not found for {symbol}')
 
-@app.post("/")
-async def ratio_analyser(file: UploadFile = File(...)):
+@app.post("/hadge")
+async def hadge_analyser(stock_data: List[Dict[str, str]], index: str,percentage_down:float):
     try:
-        contents = await file.read()
-        csv_data = contents.decode()
 
         # Convert CSV data to a list of dictionaries
-        input_data = csv_to_dict(csv_data)
+        input_data = stock_data
 
 
         portfolio_stocks = []
@@ -104,10 +109,10 @@ async def ratio_analyser(file: UploadFile = File(...)):
         #num_portfolio_stocks = int(input("Enter the number of stocks in your portfolio: "))
         for d in input_data:
             stock_ticker = f"{d['symbol']}.NS" #input(f"Enter stock symbol {i + 1}: ")
-            start_date = "-".join(d['start_date_stock'].split('/')[::-1]) #input(f"Enter start date (YYYY-MM-DD) for {stock_ticker}: ")
-            end_date = "-".join(d['end_date_stock'].split('/')[::-1]) #input(f"Enter end date (YYYY-MM-DD) for {stock_ticker}: ")
+            start_date = '2023-01-01' #input(f"Enter start date (YYYY-MM-DD) for {stock_ticker}: ")
+            end_date = '2023-10-01' #input(f"Enter end date (YYYY-MM-DD) for {stock_ticker}: ")
             stock_data = get_stock_data_from_file(stock_ticker, start_date, end_date)
-            beta = float(d['beta']) #float(input(f"Enter beta for {stock_ticker}: "))
+            beta = get_beta(d['symbol']) #float(input(f"Enter beta for {stock_ticker}: "))
             quantity = float(d['quantity']) #float(input(f"Enter quantity of {stock_ticker}: "))
             portfolio_stocks.append(stock_data)
             portfolio_tickers.append(stock_ticker)
@@ -115,9 +120,9 @@ async def ratio_analyser(file: UploadFile = File(...)):
             portfolio_quantities.append(quantity)
             portfolio_stock_data[stock_ticker] = quantity  # Store stock name and quantity
 
-        index_ticker = d['index_symbol'] #input("Enter the market index symbol: ")
-        start_date = "-".join(d['start_date_index'].split('/')[::-1]) #input("Enter start date (YYYY-MM-DD) for the market index: ")
-        end_date = "-".join(d['end_date_index'].split('/')[::-1]) #input("Enter end date (YYYY-MM-DD) for the market index: ")
+        index_ticker = index #input("Enter the market index symbol: ")
+        start_date = '2023-01-01' #input("Enter start date (YYYY-MM-DD) for the market index: ")
+        end_date = '2023-10-01' #input("Enter end date (YYYY-MM-DD) for the market index: ")
         index_data = get_index_data_from_file(index_ticker, start_date, end_date)
 
         portfolio, portfolio_value, portfolio_weighted_beta = create_portfolio(portfolio_stocks, portfolio_tickers, portfolio_quantities, portfolio_betas)
@@ -134,7 +139,7 @@ async def ratio_analyser(file: UploadFile = File(...)):
         portfolio_index_beta_ratio = total_portfolio_beta / index_current_value
 
         # Additional feature: Calculate potential return from index hedge
-        down_percentage = float(d['percentage_down']) #float(input("Enter the percentage your portfolio is expected to go down (e.g., 10 for 10%): "))
+        down_percentage = float(percentage_down) #float(input("Enter the percentage your portfolio is expected to go down (e.g., 10 for 10%): "))
         return_from_hedge = portfolio_value * (down_percentage / 100)
 
         # Create JSON data
@@ -150,9 +155,53 @@ async def ratio_analyser(file: UploadFile = File(...)):
             "Stock Data": portfolio_stock_data,  # Include stock name and quantity
             "Potential Return from Index Hedge": return_from_hedge
         }
-        return {'success':True,'data':data}
-    except:
-        return {'msg':'something went wrong','success':False}
 
+        html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    </head>
+    <body>
+        <h2>Portfolio vs. Market Index Comparison</h2>
+        <img src="data:image/png;base64, {image}" alt="Portfolio vs. Market Index Comparison" />
+        <h2>Correlation</h2>
+        <p>Correlation between the portfolio and {index_ticker}: {correlation:.2f}</p>
+        <p>Correlation Meaning: {correlation_meaning}</p>
+        <h2>Portfolio Value and Weighted Beta</h2>
+        <p>Total Portfolio Value: {portfolio_value:.2f}</p>
+        <p>Portfolio Weighted Beta: {portfolio_weighted_beta:.4f}</p>
+        <h2>Stock Data</h2>
+        <ul>
+            {"".join([f"<li>{stock_name}: {quantity}</li>" for stock_name, quantity in portfolio_stock_data.items()])}
+        </ul>
+        <h2>Additional Metrics</h2>
+        <p>Total Portfolio Beta: {total_portfolio_beta:.4f}</p>
+        <p>Portfolio vs. Index Value Ratio: {portfolio_index_value_ratio:.4f}</p>
+        <p>Portfolio vs. Index Beta Ratio: {portfolio_index_beta_ratio:.4f}</p>
+        <h2>Percentage Correlation Chart</h2>
+        <img src="data:image/png;base64, {image}" alt="Percentage Correlation Chart" />
+        <h2>Additional Feature: Potential Return from Index Hedge</h2>
+        <p>If your portfolio goes down by {down_percentage}%, you can potentially earn {return_from_hedge:.2f} from the index hedge.</p>
+    </body>
+    </html>
+    """
+        print(data)
+        return {'success':True,'data':data,'html_content':html_content}
+    except Exception as e:
+        return {'msg':'something went wrong','success':False,'data':e}
+
+# def get_all_files_in_folder(folder_path):
+#         xlsx_files = [f for f in os.listdir(folder_path) if f.endswith('.xlsx') and os.path.isfile(os.path.join(folder_path, f))]
+#         return xlsx_files
+
+# @app.get('/get/allindex')
+# def allindex():
+#     folder_path = 'Index_Data'
+#     file_names = get_all_files_in_folder(folder_path)
+
+#     print("Files in the folder:")
+#     for file_name in file_names:
+#         print('"',file_name.replace('_data.xlsx',''),'",')
+#     return file_names
 
     
