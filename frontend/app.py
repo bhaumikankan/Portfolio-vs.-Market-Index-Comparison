@@ -26,7 +26,7 @@ def call_fastapi(stock_data, index,percentage_down):
         if response.json()['success']:
             return response.json()['html_content']
         else:
-            return "<h3>Somethig went wrong..😢</h3>"
+            return f"<h4>{response.json()['msg']}</h4>"
     except :
         return "<h3>Somethig went wrong..😢</h3>"
 

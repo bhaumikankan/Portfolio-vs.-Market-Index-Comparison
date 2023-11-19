@@ -12,75 +12,95 @@ import os
 app = FastAPI()
 
 def get_stock_data_from_file(ticker, start_date, end_date):
-    file_path = f"Stock_Data/{ticker}_data.xlsx"
-    stock_data = pd.read_excel(file_path, parse_dates=True, index_col='Date')
-    stock_data = stock_data[start_date:end_date]
-    return stock_data
+    try:
+        file_path = f"Stock_Data/{ticker}_data.xlsx"
+        stock_data = pd.read_excel(file_path, parse_dates=True, index_col='Date')
+        stock_data = stock_data[start_date:end_date]
+        return stock_data
+    except FileNotFoundError as e:
+        raise Exception(f"sorry we dont have stock data for symbol {ticker.replace('.NS','')}")
+    except Exception as e:
+        print(e,'1')
+        raise Exception(str(e))
 
 def get_index_data_from_file(index_ticker, start_date, end_date):
-    file_path = f"Index_Data/{index_ticker}_data.xlsx"
-    index_data = pd.read_excel(file_path, parse_dates=True, index_col='Date')
-    index_data = index_data[start_date:end_date]
-    return index_data
+    try:
+        file_path = f"Index_Data/{index_ticker}_data.xlsx"
+        index_data = pd.read_excel(file_path, parse_dates=True, index_col='Date')
+        index_data = index_data[start_date:end_date]
+        return index_data
+    except FileNotFoundError as e:
+        raise Exception(f"sorry we dont have index data for symbol {index_ticker}")
+    except Exception as e:
+        print(e,'2')
+        raise Exception(str(e))
 
 def create_portfolio(stocks, tickers, quantities, betas):
-    portfolio = pd.DataFrame()
-    portfolio_value = 0
-    portfolio_weighted_beta = 0
-    total_quantity = 0
+    try: 
+        portfolio = pd.DataFrame()
+        portfolio_value = 0
+        portfolio_weighted_beta = 0
+        total_quantity = 0
 
-    for stock, ticker, quantity, beta in zip(stocks, tickers, quantities, betas):
-        portfolio[ticker] = stock['Close']
-        total_quantity += quantity
-        portfolio_value += stock['Close'].iloc[-1] * quantity
-        portfolio_weighted_beta += beta * quantity
+        for stock, ticker, quantity, beta in zip(stocks, tickers, quantities, betas):
+            portfolio[ticker] = stock['Close']
+            total_quantity += quantity
+            portfolio_value += stock['Close'].iloc[-1] * quantity
+            portfolio_weighted_beta += beta * quantity
 
-    if total_quantity != 0:
-        portfolio_weighted_beta /= total_quantity  # Calculate the weighted beta
+        if total_quantity != 0:
+            portfolio_weighted_beta /= total_quantity  # Calculate the weighted beta
 
-    return portfolio, portfolio_value, portfolio_weighted_beta
+        return portfolio, portfolio_value, portfolio_weighted_beta
+    except Exception as e:
+        print(e,'3')
+        raise Exception(str(e))
 
 def plot_price_relation(portfolio, index_data, portfolio_name, index_name):
-    fig, ax1 = plt.subplots(figsize=(10, 6))
+    try:
+        fig, ax1 = plt.subplots(figsize=(10, 6))
 
-    ax1.set_xlabel('Date')
-    ax1.set_ylabel(f'{portfolio_name} Portfolio', color='tab:blue')
-    ax1.plot(portfolio.index, portfolio.sum(axis=1) / portfolio.sum(axis=1).iloc[0], color='tab:blue', label=portfolio_name)
-    ax1.tick_params(axis='y', labelcolor='tab:blue')
+        ax1.set_xlabel('Date')
+        ax1.set_ylabel(f'{portfolio_name} Portfolio', color='tab:blue')
+        ax1.plot(portfolio.index, portfolio.sum(axis=1) / portfolio.sum(axis=1).iloc[0], color='tab:blue', label=portfolio_name)
+        ax1.tick_params(axis='y', labelcolor='tab:blue')
 
-    ax2 = ax1.twinx()
-    ax2.set_ylabel(f'{index_name} Normalized Closing Price', color='tab:red')
-    ax2.plot(index_data.index, index_data['Close'] / index_data['Close'].iloc[0], color='tab:red', label=index_name)
-    ax2.tick_params(axis='y', labelcolor='tab:red')
+        ax2 = ax1.twinx()
+        ax2.set_ylabel(f'{index_name} Normalized Closing Price', color='tab:red')
+        ax2.plot(index_data.index, index_data['Close'] / index_data['Close'].iloc[0], color='tab:red', label=index_name)
+        ax2.tick_params(axis='y', labelcolor='tab:red')
 
-    plt.title('Percentage Correlation Chart')
-    plt.legend(loc='upper left')
+        plt.title('Percentage Correlation Chart')
+        plt.legend(loc='upper left')
 
-    correlation = portfolio.sum(axis=1).corr(index_data['Close'])
+        correlation = portfolio.sum(axis=1).corr(index_data['Close'])
 
-    plt.text(
-        portfolio.index[10], 1.05, f'Correlation: {correlation:.2f}', fontsize=12, color='tab:blue')
+        plt.text(
+            portfolio.index[10], 1.05, f'Correlation: {correlation:.2f}', fontsize=12, color='tab:blue')
 
-    # Interpretation of the correlation result
-    correlation_meaning = ""
-    if correlation > 0.7:
-        correlation_meaning = "Strong positive correlation (Same direction) Short Underlying Index to Hedge"
-    elif correlation < -0.7:
-        correlation_meaning = "Strong negative correlation (Opposite direction) Long Underlying Index to Hedge"
-    elif correlation >= 0.25:
-        correlation_meaning = "Moderate positive correlation (Same direction) Consult With Registered Advisor to Hedge"
-    elif correlation <= -0.25:
-        correlation_meaning = "Moderate negative correlation (Opposite direction) Long Underlying Index to Hedge"
-    elif correlation >= 0.1 or correlation <= -0.1:
-        correlation_meaning = "Low correlation Consult With Registered Advisor to Hedge"
-    else:
-        correlation_meaning = "No significant correlation Consult With Registered Advisor to Hedge"
+        # Interpretation of the correlation result
+        correlation_meaning = ""
+        if correlation > 0.7:
+            correlation_meaning = "Strong positive correlation (Same direction) Short Underlying Index to Hedge"
+        elif correlation < -0.7:
+            correlation_meaning = "Strong negative correlation (Opposite direction) Long Underlying Index to Hedge"
+        elif correlation >= 0.25:
+            correlation_meaning = "Moderate positive correlation (Same direction) Consult With Registered Advisor to Hedge"
+        elif correlation <= -0.25:
+            correlation_meaning = "Moderate negative correlation (Opposite direction) Long Underlying Index to Hedge"
+        elif correlation >= 0.1 or correlation <= -0.1:
+            correlation_meaning = "Low correlation Consult With Registered Advisor to Hedge"
+        else:
+            correlation_meaning = "No significant correlation Consult With Registered Advisor to Hedge"
 
-    buffer = BytesIO()
-    plt.savefig(buffer, format="png")
-    buffer.seek(0)
+        buffer = BytesIO()
+        plt.savefig(buffer, format="png")
+        buffer.seek(0)
 
-    return base64.b64encode(buffer.read()).decode(), correlation, correlation_meaning
+        return base64.b64encode(buffer.read()).decode(), correlation, correlation_meaning
+    except Exception as e:
+        print(e,'4')
+        raise Exception(str(e))
 
 def get_beta(symbol):
     file_path = 'stock_analysis_results2018.json'
@@ -185,10 +205,10 @@ async def hadge_analyser(stock_data: List[Dict[str, str]], index: str,percentage
     </body>
     </html>
     """
-        print(data)
+        print(input_data)
         return {'success':True,'data':data,'html_content':html_content}
     except Exception as e:
-        return {'msg':'something went wrong','success':False,'data':e}
+        return {'msg':str(e),'success':False}
 
 # def get_all_files_in_folder(folder_path):
 #         xlsx_files = [f for f in os.listdir(folder_path) if f.endswith('.xlsx') and os.path.isfile(os.path.join(folder_path, f))]
